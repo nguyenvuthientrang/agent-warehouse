@@ -224,7 +224,10 @@ environment:
   environment_class: docker
 
 model:
-  model_name: "anthropic/claude-sonnet-4-5-20250929"
+  model_name: "claude-sonnet-4-5-20250929"
+  cost_tracking: "ignore_errors"
   model_kwargs:
-    drop_params: true
+    api_base: "http://localhost:8080"
+    api_key: "dummy"
     temperature: 0.0
+    drop_params: true
