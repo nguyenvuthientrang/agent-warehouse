@@ -121,6 +121,70 @@ def get_log_path(
     return log_path
 
 
+def _extract_thought_and_action(content: str) -> tuple[str, str]:
+    """Extract thought and action sections from assistant message content.
+    
+    Args:
+        content: Full message content from assistant
+        
+    Returns:
+        Tuple of (thought_text, action_text)
+    """
+    thought_text = ""
+    action_text = ""
+    
+    # Pattern to match code blocks: ```language\ncontent\n```
+    code_block_pattern = re.compile(r'```(\w+)?\n(.*?)```', re.DOTALL)
+    
+    # Extract THOUGHT section - handle both formats:
+    # 1. THOUGHT: prefix format
+    # 2. <thought>...</thought> tag format
+    thought_parts = []
+    
+    # Try THOUGHT: prefix format
+    thought_match = re.search(r'THOUGHT:\s*(.*?)(?=```|</response>|$)', content, re.DOTALL)
+    if thought_match:
+        thought_parts.append(thought_match.group(1).strip())
+    
+    # Try <thought> tag format (can have multiple tags)
+    thought_tags = re.findall(r'<thought>\s*(.*?)\s*</thought>', content, re.DOTALL)
+    if thought_tags:
+        thought_parts.extend([tag.strip() for tag in thought_tags])
+    
+    # Combine all thought parts
+    if thought_parts:
+        thought_text = "\n\n".join(thought_parts)
+    
+    # Extract all code blocks and actions
+    code_blocks = code_block_pattern.findall(content)
+    if code_blocks:
+        action_parts = []
+        for lang, code in code_blocks:
+            lang_part = f"```{lang}\n" if lang else "```\n"
+            action_parts.append(f"{lang_part}{code.strip()}\n```")
+        action_text = "\n\n".join(action_parts)
+    
+    # Also capture any other executable content patterns that might not be in code blocks
+    if not action_text:
+        command_patterns = [
+            r'sed\s+-i',
+            r'cat\s+<<',
+            r'python\s+-c',
+            r'python\s+-m',
+            r'grep\s+-',
+            r'find\s+\.',
+        ]
+        for pattern in command_patterns:
+            if re.search(pattern, content, re.IGNORECASE):
+                lines = content.split('\n')
+                command_lines = [line.strip() for line in lines if re.search(pattern, line, re.IGNORECASE)]
+                if command_lines:
+                    action_text = '\n'.join(command_lines)
+                break
+    
+    return thought_text, action_text
+
+
 def save_extracted_messages(messages: list[dict], traj_path: Path) -> None:
     """Extract and save assistant/user messages to separate JSON files.
     
@@ -134,6 +198,8 @@ def save_extracted_messages(messages: list[dict], traj_path: Path) -> None:
     # Extract assistant and user messages
     assistant_messages = []
     user_messages = []
+    thought_messages = []
+    action_messages = []
     
     for i, msg in enumerate(messages):
         role = msg.get("role", "")
@@ -141,6 +207,12 @@ def save_extracted_messages(messages: list[dict], traj_path: Path) -> None:
         
         if role == "assistant":
             assistant_messages.append({"id": i, "raw_text": content})
+            # Extract thought and action sections
+            thought_text, action_text = _extract_thought_and_action(content)
+            if thought_text:
+                thought_messages.append({"id": i, "raw_text": thought_text})
+            if action_text:
+                action_messages.append({"id": i, "raw_text": action_text})
         elif role == "user":
             user_messages.append({"id": i, "raw_text": content})
     
@@ -155,3 +227,11 @@ def save_extracted_messages(messages: list[dict], traj_path: Path) -> None:
     # Save user messages
     user_path = output_dir / "user.json"
     user_path.write_text(json.dumps(user_messages, indent=2))
+    
+    # Save thought messages
+    thought_path = output_dir / "thought.json"
+    thought_path.write_text(json.dumps(thought_messages, indent=2))
+    
+    # Save action messages
+    action_path = output_dir / "action.json"
+    action_path.write_text(json.dumps(action_messages, indent=2))
