@@ -98,6 +98,7 @@ def get_log_path(
     model_name: str,
     instance_id: str | None = None,
     base_dir: Path | None = None,
+    include_timestamp: bool = True,
 ) -> Path:
     """Generate a structured log path.
     
@@ -106,9 +107,11 @@ def get_log_path(
         model_name: Name of the model being used
         instance_id: Instance ID (for swebench) or None (for mini)
         base_dir: Base directory for logs (defaults to current directory)
+        include_timestamp: Whether to include timestamp in the path (default: True)
     
     Returns:
         Path to the log file in format: logs/{run_type}/{model}_{time}/{instance_id}/{instance_id}.traj.json
+        or logs/{run_type}/{model}/{instance_id}/{instance_id}.traj.json if include_timestamp=False
     """
     if base_dir is None:
         base_dir = Path.cwd()
@@ -116,15 +119,19 @@ def get_log_path(
     # Sanitize model name for filesystem
     safe_model_name = re.sub(r'[^\w\-_.]', '_', model_name.replace('/', '_'))
     
-    # Generate timestamp
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    
     # Build path
+    if include_timestamp:
+        # Generate timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        model_dir = f"{safe_model_name}_{timestamp}"
+    else:
+        model_dir = safe_model_name
+    
     if instance_id:
         safe_instance = re.sub(r'[^\w\-_.]', '_', instance_id)
-        log_path = base_dir / "logs" / run_type / f"{safe_model_name}_{timestamp}" / safe_instance / f"{safe_instance}.traj.json"
+        log_path = base_dir / "logs" / run_type / model_dir / safe_instance / f"{safe_instance}.traj.json"
     else:
-        log_path = base_dir / "logs" / run_type / f"{safe_model_name}_{timestamp}" / "run.traj.json"
+        log_path = base_dir / "logs" / run_type / model_dir / "run.traj.json"
     
     return log_path
 

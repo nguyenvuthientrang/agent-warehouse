@@ -24,7 +24,7 @@ from minisweagent.config import builtin_config_dir, get_config_path
 from minisweagent.environments import get_environment
 from minisweagent.models import get_model
 from minisweagent.run.extra.utils.batch_progress import RunBatchProgressManager
-from minisweagent.run.utils.save import save_traj
+from minisweagent.run.utils.save import get_log_path, save_traj
 from minisweagent.utils.log import add_file_handler, logger
 
 _HELP_TEXT = """Run mini-SWE-agent on SWEBench instances.
@@ -127,12 +127,14 @@ def process_instance(
 ) -> None:
     """Process a single SWEBench instance."""
     instance_id = instance["instance_id"]
-    instance_dir = output_dir / instance_id
     # avoid inconsistent state if something here fails and there's leftover previous files
     remove_from_preds_file(output_dir / "preds.json", instance_id)
-    (instance_dir / f"{instance_id}.traj.json").unlink(missing_ok=True)
     model = get_model(config=config.get("model", {}))
     task = instance["problem_statement"]
+    
+    # Generate structured log path: logs/swebench/{model_name}_{timestamp}/{instance_id}/{instance_id}.traj.json
+    model_name = model.config.model_name
+    log_path = get_log_path("swebench", model_name, instance_id)
 
     progress_manager.on_instance_start(instance_id)
     progress_manager.update_instance_status(instance_id, "Pulling/starting docker")
@@ -155,9 +157,10 @@ def process_instance(
         exit_status, result = type(e).__name__, str(e)
         extra_info = {"traceback": traceback.format_exc()}
     finally:
+        # Save to structured log path: logs/swebench/{model_name}/{instance_id}/{instance_id}.traj.json
         save_traj(
             agent,
-            instance_dir / f"{instance_id}.traj.json",
+            log_path,
             exit_status=exit_status,
             result=result,
             extra_info=extra_info,
