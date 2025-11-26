@@ -86,10 +86,22 @@ def main(
             
             # Delete logs if requested
             if delete_logs and log_path and log_path.exists():
+                # Delete extracted message files
+                assistant_path = log_path.parent / "assistant.json"
+                user_path = log_path.parent / "user.json"
+                if assistant_path.exists():
+                    assistant_path.unlink()
+                if user_path.exists():
+                    user_path.unlink()
+                # Delete trajectory file
                 log_path.unlink()
+                # Remove empty directories
                 if log_path.parent.exists() and not any(log_path.parent.iterdir()):
                     log_path.parent.rmdir()
-                logger.info(f"Deleted log file '{log_path}'")
+                    # Also remove parent if empty
+                    if log_path.parent.parent.exists() and not any(log_path.parent.parent.iterdir()):
+                        log_path.parent.parent.rmdir()
+                logger.info(f"Deleted log files in '{log_path.parent}'")
 
 
 if __name__ == "__main__":

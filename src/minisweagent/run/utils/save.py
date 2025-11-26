@@ -76,6 +76,11 @@ def save_traj(
 
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2))
+    
+    # Extract and save assistant/user messages to separate files
+    if agent is not None and agent.messages:
+        save_extracted_messages(agent.messages, path)
+    
     if print_path:
         print_fct(f"Saved trajectory to '{path}'")
 
@@ -95,7 +100,7 @@ def get_log_path(
         base_dir: Base directory for logs (defaults to current directory)
     
     Returns:
-        Path to the log file in format: logs/{run_type}/{model}_{time}/{instance}.traj.json
+        Path to the log file in format: logs/{run_type}/{model}_{time}/{instance_id}/{instance_id}.traj.json
     """
     if base_dir is None:
         base_dir = Path.cwd()
@@ -109,8 +114,44 @@ def get_log_path(
     # Build path
     if instance_id:
         safe_instance = re.sub(r'[^\w\-_.]', '_', instance_id)
-        log_path = base_dir / "logs" / run_type / f"{safe_model_name}_{timestamp}" / f"{safe_instance}.traj.json"
+        log_path = base_dir / "logs" / run_type / f"{safe_model_name}_{timestamp}" / safe_instance / f"{safe_instance}.traj.json"
     else:
         log_path = base_dir / "logs" / run_type / f"{safe_model_name}_{timestamp}" / "run.traj.json"
     
     return log_path
+
+
+def save_extracted_messages(messages: list[dict], traj_path: Path) -> None:
+    """Extract and save assistant/user messages to separate JSON files.
+    
+    Args:
+        messages: List of message dicts from the agent
+        traj_path: Path to the trajectory file (used to determine output directory)
+    """
+    if not messages or traj_path is None:
+        return
+    
+    # Extract assistant and user messages
+    assistant_messages = []
+    user_messages = []
+    
+    for i, msg in enumerate(messages):
+        role = msg.get("role", "")
+        content = msg.get("content", "")
+        
+        if role == "assistant":
+            assistant_messages.append({"id": i, "raw_text": content})
+        elif role == "user":
+            user_messages.append({"id": i, "raw_text": content})
+    
+    # Save to the same directory as the trajectory file
+    output_dir = traj_path.parent
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Save assistant messages
+    assistant_path = output_dir / "assistant.json"
+    assistant_path.write_text(json.dumps(assistant_messages, indent=2))
+    
+    # Save user messages
+    user_path = output_dir / "user.json"
+    user_path.write_text(json.dumps(user_messages, indent=2))
