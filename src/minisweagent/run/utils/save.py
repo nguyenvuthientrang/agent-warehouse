@@ -8,6 +8,12 @@ from typing import Any
 
 from minisweagent import Agent, __version__
 
+try:
+    from sentence_transformers import SentenceTransformer
+    _SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    _SENTENCE_TRANSFORMERS_AVAILABLE = False
+
 
 def _get_class_name_with_module(obj: Any) -> str:
     """Get the full class name with module path."""
@@ -30,6 +36,7 @@ def save_traj(
     result: str | None = None,
     extra_info: dict | None = None,
     print_fct: Callable = print,
+    embedding_model: str | None = None,
     **kwargs,
 ):
     """Save the trajectory of the agent to a file.
@@ -41,6 +48,7 @@ def save_traj(
         exit_status: The exit status of the agent.
         result: The result/submission of the agent.
         extra_info: Extra information to save (will be merged into the info dict).
+        embedding_model: Name of the embedding model to use for thought embeddings (default: BAAI/bge-large-en-v1.5)
         **kwargs: Additional information to save (will be merged into top level)
 
     """
@@ -79,7 +87,7 @@ def save_traj(
     
     # Extract and save assistant/user messages to separate files
     if agent is not None and agent.messages:
-        save_extracted_messages(agent.messages, path)
+        save_extracted_messages(agent.messages, path, embedding_model=embedding_model)
     
     if print_path:
         print_fct(f"Saved trajectory to '{path}'")
@@ -185,12 +193,52 @@ def _extract_thought_and_action(content: str) -> tuple[str, str]:
     return thought_text, action_text
 
 
-def save_extracted_messages(messages: list[dict], traj_path: Path) -> None:
+def _generate_embeddings(
+    thought_messages: list[dict], embedding_model_name: str | None = None
+) -> list[dict] | None:
+    """Generate embeddings for thought messages.
+    
+    Args:
+        thought_messages: List of thought message dicts with 'id' and 'raw_text'
+        embedding_model_name: Name of the embedding model to use (default: BAAI/bge-large-en-v1.5)
+        
+    Returns:
+        List of dicts with 'id' and 'embedding', or None if sentence-transformers is not available
+    """
+    if not _SENTENCE_TRANSFORMERS_AVAILABLE:
+        return None
+    
+    if not thought_messages:
+        return []
+    
+    if embedding_model_name is None:
+        embedding_model_name = "BAAI/bge-large-en-v1.5"
+    
+    try:
+        model = SentenceTransformer(embedding_model_name)
+        texts = [msg["raw_text"] for msg in thought_messages]
+        embeddings = model.encode(texts, convert_to_numpy=True, show_progress_bar=False)
+        
+        return [
+            {"id": msg["id"], "embedding": embedding.tolist()}
+            for msg, embedding in zip(thought_messages, embeddings)
+        ]
+    except Exception as e:
+        # If embedding generation fails, return None (don't break the save process)
+        import warnings
+        warnings.warn(f"Failed to generate embeddings: {e}", UserWarning)
+        return None
+
+
+def save_extracted_messages(
+    messages: list[dict], traj_path: Path, embedding_model: str | None = None
+) -> None:
     """Extract and save assistant/user messages to separate JSON files.
     
     Args:
         messages: List of message dicts from the agent
         traj_path: Path to the trajectory file (used to determine output directory)
+        embedding_model: Name of the embedding model to use for thought embeddings (default: BAAI/bge-large-en-v1.5)
     """
     if not messages or traj_path is None:
         return
@@ -235,3 +283,9 @@ def save_extracted_messages(messages: list[dict], traj_path: Path) -> None:
     # Save action messages
     action_path = output_dir / "action.json"
     action_path.write_text(json.dumps(action_messages, indent=2))
+    
+    # Generate and save thought embeddings
+    thought_embeddings = _generate_embeddings(thought_messages, embedding_model)
+    if thought_embeddings is not None:
+        embedding_path = output_dir / "thought_embedding.json"
+        embedding_path.write_text(json.dumps(thought_embeddings, indent=2))

@@ -57,6 +57,7 @@ def main(
     exit_immediately: bool = typer.Option( False, "--exit-immediately", help="Exit immediately when the agent wants to finish instead of prompting.", rich_help_panel="Advanced"),
     save_logs: bool = typer.Option(True, "--save-logs/--no-save-logs", help="Save logs to structured folder (logs/mini/{model}_{time}/run.traj.json)"),
     delete_logs: bool = typer.Option(False, "--delete-logs", help="Delete logs after completion (only works with --save-logs)"),
+    embedding_model: str | None = typer.Option(None, "--embedding-model", help="Embedding model to use for thought embeddings (default: BAAI/bge-large-en-v1.5)", rich_help_panel="Advanced"),
 ) -> Any:
     # fmt: on
     configure_if_first_time()
@@ -103,23 +104,21 @@ def main(
         exit_status, result = type(e).__name__, str(e)
         extra_info = {"traceback": traceback.format_exc()}
     finally:
-        save_traj(agent, output, exit_status=exit_status, result=result, extra_info=extra_info)  # type: ignore[arg-type]
+        save_traj(agent, output, exit_status=exit_status, result=result, extra_info=extra_info, embedding_model=embedding_model)  # type: ignore[arg-type]
         
         # Save to structured log folder if requested
         if save_logs:
             resolved_model_name = model_name or getattr(agent.model.config, "model_name", None) or config.get("model", {}).get("model_name", "unknown")
             log_path = get_log_path("mini", resolved_model_name)
-            save_traj(agent, log_path, exit_status=exit_status, result=result, extra_info=extra_info, print_path=True)  # type: ignore[arg-type]
+            save_traj(agent, log_path, exit_status=exit_status, result=result, extra_info=extra_info, print_path=True, embedding_model=embedding_model)  # type: ignore[arg-type]
             
             # Delete logs if requested
             if delete_logs and log_path and log_path.exists():
                 # Delete extracted message files
-                assistant_path = log_path.parent / "assistant.json"
-                user_path = log_path.parent / "user.json"
-                if assistant_path.exists():
-                    assistant_path.unlink()
-                if user_path.exists():
-                    user_path.unlink()
+                for filename in ["assistant.json", "user.json", "thought.json", "action.json", "thought_embedding.json"]:
+                    file_path = log_path.parent / filename
+                    if file_path.exists():
+                        file_path.unlink()
                 # Delete trajectory file
                 log_path.unlink()
                 # Remove empty directories
