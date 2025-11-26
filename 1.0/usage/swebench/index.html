@@ -2703,7 +2703,7 @@ For example, you could use</p>
 <span class="kn">from</span><span class="w"> </span><span class="nn">minisweagent.environments</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_environment</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">minisweagent.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_model</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">minisweagent.run.extra.utils.batch_progress</span><span class="w"> </span><span class="kn">import</span> <span class="n">RunBatchProgressManager</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">minisweagent.run.utils.save</span><span class="w"> </span><span class="kn">import</span> <span class="n">save_traj</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">minisweagent.run.utils.save</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_log_path</span><span class="p">,</span> <span class="n">save_traj</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">minisweagent.utils.log</span><span class="w"> </span><span class="kn">import</span> <span class="n">add_file_handler</span><span class="p">,</span> <span class="n">logger</span>
 
 <span class="n">_HELP_TEXT</span> <span class="o">=</span> <span class="s2">"""Run mini-SWE-agent on SWEBench instances.</span>
@@ -2806,12 +2806,14 @@ For example, you could use</p>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Process a single SWEBench instance."""</span>
     <span class="n">instance_id</span> <span class="o">=</span> <span class="n">instance</span><span class="p">[</span><span class="s2">"instance_id"</span><span class="p">]</span>
-    <span class="n">instance_dir</span> <span class="o">=</span> <span class="n">output_dir</span> <span class="o">/</span> <span class="n">instance_id</span>
     <span class="c1"># avoid inconsistent state if something here fails and there's leftover previous files</span>
     <span class="n">remove_from_preds_file</span><span class="p">(</span><span class="n">output_dir</span> <span class="o">/</span> <span class="s2">"preds.json"</span><span class="p">,</span> <span class="n">instance_id</span><span class="p">)</span>
-    <span class="p">(</span><span class="n">instance_dir</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">instance_id</span><span class="si">}</span><span class="s2">.traj.json"</span><span class="p">)</span><span class="o">.</span><span class="n">unlink</span><span class="p">(</span><span class="n">missing_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
     <span class="n">model</span> <span class="o">=</span> <span class="n">get_model</span><span class="p">(</span><span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"model"</span><span class="p">,</span> <span class="p">{}))</span>
     <span class="n">task</span> <span class="o">=</span> <span class="n">instance</span><span class="p">[</span><span class="s2">"problem_statement"</span><span class="p">]</span>
+
+    <span class="c1"># Generate structured log path: logs/swebench/{model_name}_{timestamp}/{instance_id}/{instance_id}.traj.json</span>
+    <span class="n">model_name</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">model_name</span>
+    <span class="n">log_path</span> <span class="o">=</span> <span class="n">get_log_path</span><span class="p">(</span><span class="s2">"swebench"</span><span class="p">,</span> <span class="n">model_name</span><span class="p">,</span> <span class="n">instance_id</span><span class="p">)</span>
 
     <span class="n">progress_manager</span><span class="o">.</span><span class="n">on_instance_start</span><span class="p">(</span><span class="n">instance_id</span><span class="p">)</span>
     <span class="n">progress_manager</span><span class="o">.</span><span class="n">update_instance_status</span><span class="p">(</span><span class="n">instance_id</span><span class="p">,</span> <span class="s2">"Pulling/starting docker"</span><span class="p">)</span>
@@ -2834,9 +2836,10 @@ For example, you could use</p>
         <span class="n">exit_status</span><span class="p">,</span> <span class="n">result</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
         <span class="n">extra_info</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"traceback"</span><span class="p">:</span> <span class="n">traceback</span><span class="o">.</span><span class="n">format_exc</span><span class="p">()}</span>
     <span class="k">finally</span><span class="p">:</span>
+        <span class="c1"># Save to structured log path: logs/swebench/{model_name}/{instance_id}/{instance_id}.traj.json</span>
         <span class="n">save_traj</span><span class="p">(</span>
             <span class="n">agent</span><span class="p">,</span>
-            <span class="n">instance_dir</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">instance_id</span><span class="si">}</span><span class="s2">.traj.json"</span><span class="p">,</span>
+            <span class="n">log_path</span><span class="p">,</span>
             <span class="n">exit_status</span><span class="o">=</span><span class="n">exit_status</span><span class="p">,</span>
             <span class="n">result</span><span class="o">=</span><span class="n">result</span><span class="p">,</span>
             <span class="n">extra_info</span><span class="o">=</span><span class="n">extra_info</span><span class="p">,</span>
