@@ -10,6 +10,7 @@ import re
 import threading
 import time
 import traceback
+from datetime import datetime
 from pathlib import Path
 
 import typer
@@ -124,6 +125,7 @@ def process_instance(
     output_dir: Path,
     config: dict,
     progress_manager: RunBatchProgressManager,
+    batch_timestamp: str | None = None,
 ) -> None:
     """Process a single SWEBench instance."""
     instance_id = instance["instance_id"]
@@ -133,8 +135,9 @@ def process_instance(
     task = instance["problem_statement"]
     
     # Generate structured log path: logs/swebench/{model_name}_{timestamp}/{instance_id}/{instance_id}.traj.json
+    # Use batch_timestamp if provided (for grouping all instances from same batch run)
     model_name = model.config.model_name
-    log_path = get_log_path("swebench", model_name, instance_id)
+    log_path = get_log_path("swebench", model_name, instance_id, timestamp=batch_timestamp)
 
     progress_manager.on_instance_start(instance_id)
     progress_manager.update_instance_status(instance_id, "Pulling/starting docker")
@@ -203,7 +206,7 @@ def main(
     workers: int = typer.Option(1, "-w", "--workers", help="Number of worker threads for parallel processing", rich_help_panel="Basic"),
     model: str | None = typer.Option(None, "-m", "--model", help="Model to use", rich_help_panel="Basic"),
     model_class: str | None = typer.Option(None, "-c", "--model-class", help="Model class to use (e.g., 'anthropic' or 'minisweagent.models.anthropic.AnthropicModel')", rich_help_panel="Advanced"),
-    redo_existing: bool = typer.Option(False, "--redo-existing", help="Redo existing instances", rich_help_panel="Data selection"),
+    redo_existing: bool = typer.Option(True, "--redo-existing/--skip-existing", help="Redo existing instances (default: True, use --skip-existing to skip)", rich_help_panel="Data selection"),
     config_spec: Path = typer.Option( builtin_config_dir / "extra" / "swebench.yaml", "-c", "--config", help="Path to a config file", rich_help_panel="Basic"),
     environment_class: str | None = typer.Option( None, "--environment-class", help="Environment type to use. Recommended are docker or singularity", rich_help_panel="Advanced"),
 ) -> None:
@@ -235,6 +238,9 @@ def main(
         config.setdefault("model", {})["model_class"] = model_class
 
     progress_manager = RunBatchProgressManager(len(instances), output_path / f"exit_statuses_{time.time()}.yaml")
+    
+    # Generate timestamp once for the entire batch run (so all instances share the same timestamp)
+    batch_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     def process_futures(futures: dict[concurrent.futures.Future, str]):
         for future in concurrent.futures.as_completed(futures):
@@ -250,7 +256,7 @@ def main(
     with Live(progress_manager.render_group, refresh_per_second=4):
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
             futures = {
-                executor.submit(process_instance, instance, output_path, config, progress_manager): instance[
+                executor.submit(process_instance, instance, output_path, config, progress_manager, batch_timestamp): instance[
                     "instance_id"
                 ]
                 for instance in instances

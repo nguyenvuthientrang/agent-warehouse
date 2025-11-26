@@ -99,6 +99,7 @@ def get_log_path(
     instance_id: str | None = None,
     base_dir: Path | None = None,
     include_timestamp: bool = True,
+    timestamp: str | None = None,
 ) -> Path:
     """Generate a structured log path.
     
@@ -108,6 +109,7 @@ def get_log_path(
         instance_id: Instance ID (for swebench) or None (for mini)
         base_dir: Base directory for logs (defaults to current directory)
         include_timestamp: Whether to include timestamp in the path (default: True)
+        timestamp: Pre-generated timestamp string (format: YYYYMMDD_HHMMSS). If None and include_timestamp=True, generates new timestamp.
     
     Returns:
         Path to the log file in format: logs/{run_type}/{model}_{time}/{instance_id}/{instance_id}.traj.json
@@ -121,8 +123,9 @@ def get_log_path(
     
     # Build path
     if include_timestamp:
-        # Generate timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Use provided timestamp or generate new one
+        if timestamp is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         model_dir = f"{safe_model_name}_{timestamp}"
     else:
         model_dir = safe_model_name
