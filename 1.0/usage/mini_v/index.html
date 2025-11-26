@@ -2690,10 +2690,22 @@ You can use <code>Tab</code> or <code>Esc</code> to switch between the input fie
 
             <span class="c1"># Delete logs if requested</span>
             <span class="k">if</span> <span class="n">delete_logs</span> <span class="ow">and</span> <span class="n">log_path</span> <span class="ow">and</span> <span class="n">log_path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+                <span class="c1"># Delete extracted message files</span>
+                <span class="n">assistant_path</span> <span class="o">=</span> <span class="n">log_path</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="s2">"assistant.json"</span>
+                <span class="n">user_path</span> <span class="o">=</span> <span class="n">log_path</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="s2">"user.json"</span>
+                <span class="k">if</span> <span class="n">assistant_path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+                    <span class="n">assistant_path</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">user_path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+                    <span class="n">user_path</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+                <span class="c1"># Delete trajectory file</span>
                 <span class="n">log_path</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+                <span class="c1"># Remove empty directories</span>
                 <span class="k">if</span> <span class="n">log_path</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="n">log_path</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">iterdir</span><span class="p">()):</span>
                     <span class="n">log_path</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">rmdir</span><span class="p">()</span>
-                <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"[dim]Deleted log file '</span><span class="si">{</span><span class="n">log_path</span><span class="si">}</span><span class="s2">'[/dim]"</span><span class="p">)</span>
+                    <span class="c1"># Also remove parent if empty</span>
+                    <span class="k">if</span> <span class="n">log_path</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="n">log_path</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">iterdir</span><span class="p">()):</span>
+                        <span class="n">log_path</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">rmdir</span><span class="p">()</span>
+                <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"[dim]Deleted log files in '</span><span class="si">{</span><span class="n">log_path</span><span class="o">.</span><span class="n">parent</span><span class="si">}</span><span class="s2">'[/dim]"</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">agent</span>
 
 
