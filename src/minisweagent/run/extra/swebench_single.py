@@ -15,7 +15,7 @@ from minisweagent.run.extra.swebench import (
     DATASET_MAPPING,
     get_sb_environment,
 )
-from minisweagent.run.utils.save import save_traj
+from minisweagent.run.utils.save import get_log_path, save_traj
 from minisweagent.utils.log import logger
 
 app = typer.Typer(add_completion=False)
@@ -35,6 +35,8 @@ def main(
     environment_class: str | None = typer.Option(None, "--environment-class", rich_help_panel="Advanced"),
     exit_immediately: bool = typer.Option( False, "--exit-immediately", help="Exit immediately when the agent wants to finish instead of prompting.", rich_help_panel="Basic"),
     output: Path = typer.Option(DEFAULT_OUTPUT, "-o", "--output", help="Output trajectory file", rich_help_panel="Basic"),
+    save_logs: bool = typer.Option(True, "--save-logs/--no-save-logs", help="Save logs to structured folder (logs/swebench/{model}_{time}/{instance}.traj.json)", rich_help_panel="Basic"),
+    delete_logs: bool = typer.Option(False, "--delete-logs", help="Delete logs after completion (only works with --save-logs)", rich_help_panel="Basic"),
 ) -> None:
     # fmt: on
     """Run on a single SWE-Bench instance."""
@@ -65,6 +67,7 @@ def main(
     )
 
     exit_status, result, extra_info = None, None, None
+    log_path = None
     try:
         exit_status, result = agent.run(instance["problem_statement"])  # type: ignore[arg-type]
     except Exception as e:
@@ -73,6 +76,20 @@ def main(
         extra_info = {"traceback": traceback.format_exc()}
     finally:
         save_traj(agent, output, exit_status=exit_status, result=result, extra_info=extra_info)  # type: ignore[arg-type]
+        
+        # Save to structured log folder if requested
+        if save_logs:
+            resolved_model_name = model_name or getattr(agent.model.config, "model_name", None) or config.get("model", {}).get("model_name", "unknown")
+            instance_id = instance["instance_id"]  # type: ignore
+            log_path = get_log_path("swebench", resolved_model_name, instance_id)
+            save_traj(agent, log_path, exit_status=exit_status, result=result, extra_info=extra_info, print_path=True)  # type: ignore[arg-type]
+            
+            # Delete logs if requested
+            if delete_logs and log_path and log_path.exists():
+                log_path.unlink()
+                if log_path.parent.exists() and not any(log_path.parent.iterdir()):
+                    log_path.parent.rmdir()
+                logger.info(f"Deleted log file '{log_path}'")
 
 
 if __name__ == "__main__":

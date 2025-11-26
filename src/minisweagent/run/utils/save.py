@@ -1,6 +1,8 @@
 import dataclasses
 import json
+import re
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -76,3 +78,39 @@ def save_traj(
     path.write_text(json.dumps(data, indent=2))
     if print_path:
         print_fct(f"Saved trajectory to '{path}'")
+
+
+def get_log_path(
+    run_type: str,
+    model_name: str,
+    instance_id: str | None = None,
+    base_dir: Path | None = None,
+) -> Path:
+    """Generate a structured log path.
+    
+    Args:
+        run_type: Either "swebench" or "mini"
+        model_name: Name of the model being used
+        instance_id: Instance ID (for swebench) or None (for mini)
+        base_dir: Base directory for logs (defaults to current directory)
+    
+    Returns:
+        Path to the log file in format: logs/{run_type}/{model}_{time}/{instance}.traj.json
+    """
+    if base_dir is None:
+        base_dir = Path.cwd()
+    
+    # Sanitize model name for filesystem
+    safe_model_name = re.sub(r'[^\w\-_.]', '_', model_name.replace('/', '_'))
+    
+    # Generate timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    # Build path
+    if instance_id:
+        safe_instance = re.sub(r'[^\w\-_.]', '_', instance_id)
+        log_path = base_dir / "logs" / run_type / f"{safe_model_name}_{timestamp}" / f"{safe_instance}.traj.json"
+    else:
+        log_path = base_dir / "logs" / run_type / f"{safe_model_name}_{timestamp}" / "run.traj.json"
+    
+    return log_path

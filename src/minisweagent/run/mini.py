@@ -22,7 +22,7 @@ from minisweagent.config import builtin_config_dir, get_config_path
 from minisweagent.environments.local import LocalEnvironment
 from minisweagent.models import get_model
 from minisweagent.run.extra.config import configure_if_first_time
-from minisweagent.run.utils.save import save_traj
+from minisweagent.run.utils.save import get_log_path, save_traj
 from minisweagent.utils.log import logger
 
 DEFAULT_CONFIG = Path(os.getenv("MSWEA_MINI_CONFIG_PATH", builtin_config_dir / "mini.yaml"))
@@ -55,6 +55,8 @@ def main(
     config_spec: Path = typer.Option(DEFAULT_CONFIG, "-c", "--config", help="Path to config file"),
     output: Path | None = typer.Option(DEFAULT_OUTPUT, "-o", "--output", help="Output trajectory file"),
     exit_immediately: bool = typer.Option( False, "--exit-immediately", help="Exit immediately when the agent wants to finish instead of prompting.", rich_help_panel="Advanced"),
+    save_logs: bool = typer.Option(True, "--save-logs/--no-save-logs", help="Save logs to structured folder (logs/mini/{model}_{time}/run.traj.json)"),
+    delete_logs: bool = typer.Option(False, "--delete-logs", help="Delete logs after completion (only works with --save-logs)"),
 ) -> Any:
     # fmt: on
     configure_if_first_time()
@@ -93,6 +95,7 @@ def main(
 
     agent = agent_class(model, env, **config.get("agent", {}))
     exit_status, result, extra_info = None, None, None
+    log_path = None
     try:
         exit_status, result = agent.run(task)  # type: ignore[arg-type]
     except Exception as e:
@@ -101,6 +104,19 @@ def main(
         extra_info = {"traceback": traceback.format_exc()}
     finally:
         save_traj(agent, output, exit_status=exit_status, result=result, extra_info=extra_info)  # type: ignore[arg-type]
+        
+        # Save to structured log folder if requested
+        if save_logs:
+            resolved_model_name = model_name or getattr(agent.model.config, "model_name", None) or config.get("model", {}).get("model_name", "unknown")
+            log_path = get_log_path("mini", resolved_model_name)
+            save_traj(agent, log_path, exit_status=exit_status, result=result, extra_info=extra_info, print_path=True)  # type: ignore[arg-type]
+            
+            # Delete logs if requested
+            if delete_logs and log_path and log_path.exists():
+                log_path.unlink()
+                if log_path.parent.exists() and not any(log_path.parent.iterdir()):
+                    log_path.parent.rmdir()
+                console.print(f"[dim]Deleted log file '{log_path}'[/dim]")
     return agent
 
 
