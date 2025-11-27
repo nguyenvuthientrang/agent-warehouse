@@ -45,20 +45,20 @@ def load_embeddings(embedding_path: Path) -> tuple[list[dict], np.ndarray, list[
 
 
 def calculate_causal_similarity_matrix(embeddings: np.ndarray) -> np.ndarray:
-    """Calculate causal cosine similarity matrix (only upper triangular - causal direction).
+    """Calculate causal cosine similarity matrix (only lower triangular - inverted causal direction).
     
     Args:
         embeddings: Embedding vectors sorted by ID, shape (n_samples, n_features)
         
     Returns:
-        Causal similarity matrix where similarity[i,j] = similarity if i <= j, else 0
-        This represents: thought i can influence thought j if i comes before j
+        Causal similarity matrix where similarity[i,j] = similarity if i >= j, else 0
+        This represents: thought j (earlier) can influence thought i (later) if j <= i
     """
     # Calculate full similarity matrix
     similarity_matrix = cosine_similarity(embeddings)
     
-    # Make it causal: only upper triangular (thought i can influence thought j if i < j)
-    causal_matrix = np.triu(similarity_matrix, k=0)
+    # Make it causal (inverted): only lower triangular (thought j can influence thought i if j <= i)
+    causal_matrix = np.tril(similarity_matrix, k=0)
     
     return causal_matrix
 
@@ -102,8 +102,8 @@ def visualize_causal_similarity(
     cbar.set_label('Cosine Similarity', rotation=270, labelpad=20)
     
     # Add labels
-    ax.set_xlabel('Thought ID (later in conversation)', fontsize=12)
-    ax.set_ylabel('Thought ID (earlier in conversation)', fontsize=12)
+    ax.set_xlabel('Thought ID (earlier in conversation)', fontsize=12)
+    ax.set_ylabel('Thought ID (later in conversation)', fontsize=12)
     ax.set_title(title, fontsize=14, fontweight='bold')
     
     # Add grid for better readability
@@ -114,7 +114,7 @@ def visualize_causal_similarity(
     # Add text annotations for high similarity values (optional, can be slow for large matrices)
     if n <= 50:  # Only annotate for smaller matrices
         for i in range(n):
-            for j in range(i, n):  # Only upper triangular
+            for j in range(i + 1):  # Only lower triangular
                 if similarity_matrix[i, j] > 0.7:  # Only show high similarities
                     text = ax.text(j, i, f'{similarity_matrix[i, j]:.2f}',
                                  ha="center", va="center", color="white", fontsize=6)
@@ -228,7 +228,8 @@ def main():
     # Calculate similarity between consecutive thoughts
     consecutive_similarities = []
     for i in range(len(ids) - 1):
-        consecutive_similarities.append(similarity_matrix[i, i+1])
+        # For lower triangular: similarity[i+1, i] shows how thought i influences thought i+1
+        consecutive_similarities.append(similarity_matrix[i+1, i])
     if consecutive_similarities:
         print(f"  Consecutive thoughts: mean = {np.mean(consecutive_similarities):.4f}, "
               f"min = {np.min(consecutive_similarities):.4f}, "
@@ -239,13 +240,13 @@ def main():
     # Mask diagonal and consecutive pairs
     np.fill_diagonal(masked_matrix, -np.inf)
     for i in range(len(ids) - 1):
-        masked_matrix[i, i+1] = -np.inf
+        masked_matrix[i+1, i] = -np.inf  # Mask consecutive pairs
     
     max_idx = np.unravel_index(np.argmax(masked_matrix), masked_matrix.shape)
     max_sim = masked_matrix[max_idx]
     if max_sim > -np.inf:
         print(f"\nMost similar non-consecutive pair:")
-        print(f"  Thought {ids[max_idx[0]]} -> Thought {ids[max_idx[1]]}: similarity = {max_sim:.4f}")
+        print(f"  Thought {ids[max_idx[1]]} -> Thought {ids[max_idx[0]]}: similarity = {max_sim:.4f}")
 
 
 if __name__ == "__main__":
