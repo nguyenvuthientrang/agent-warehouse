@@ -240,6 +240,43 @@ def _generate_embeddings(
         return None
 
 
+def _generate_action_embeddings(
+    action_messages: list[dict], embedding_model_name: str | None = None
+) -> list[dict] | None:
+    """Generate embeddings for action messages.
+    
+    Args:
+        action_messages: List of action message dicts with 'id' and 'raw_text'
+        embedding_model_name: Name of the embedding model to use (default: nomic-ai/nomic-embed-code)
+        
+    Returns:
+        List of dicts with 'id' and 'embedding', or None if sentence-transformers is not available
+    """
+    if not _SENTENCE_TRANSFORMERS_AVAILABLE:
+        return None
+    
+    if not action_messages:
+        return []
+    
+    if embedding_model_name is None:
+        embedding_model_name = "nomic-ai/nomic-embed-code"
+    
+    try:
+        model = SentenceTransformer(embedding_model_name)
+        texts = [msg["raw_text"] for msg in action_messages]
+        embeddings = model.encode(texts, convert_to_numpy=True, show_progress_bar=False)
+        
+        return [
+            {"id": msg["id"], "embedding": embedding.tolist()}
+            for msg, embedding in zip(action_messages, embeddings)
+        ]
+    except Exception as e:
+        # If embedding generation fails, return None (don't break the save process)
+        import warnings
+        warnings.warn(f"Failed to generate action embeddings: {e}", UserWarning)
+        return None
+
+
 def save_extracted_messages(
     messages: list[dict], traj_path: Path, embedding_model: str | None = None
 ) -> None:
@@ -299,3 +336,9 @@ def save_extracted_messages(
     if thought_embeddings is not None:
         embedding_path = output_dir / "thought_embedding.json"
         embedding_path.write_text(json.dumps(thought_embeddings, indent=2))
+    
+    # Generate and save action embeddings using nomic-ai/nomic-embed-code
+    action_embeddings = _generate_action_embeddings(action_messages)
+    if action_embeddings is not None:
+        action_embedding_path = output_dir / "action_embedding.json"
+        action_embedding_path.write_text(json.dumps(action_embeddings, indent=2))

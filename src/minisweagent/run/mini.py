@@ -115,7 +115,7 @@ def main(
             # Delete logs if requested
             if delete_logs and log_path and log_path.exists():
                 # Delete extracted message files
-                for filename in ["assistant.json", "user.json", "thought.json", "action.json", "thought_embedding.json"]:
+                for filename in ["assistant.json", "user.json", "thought.json", "action.json", "thought_embedding.json", "action_embedding.json"]:
                     file_path = log_path.parent / filename
                     if file_path.exists():
                         file_path.unlink()
