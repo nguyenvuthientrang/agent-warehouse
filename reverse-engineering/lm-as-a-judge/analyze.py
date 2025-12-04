@@ -47,7 +47,11 @@ INPUT DATA
 YOUR ANALYSIS
 ----------------------------------------------------------------------
 
-Output your six JSON objects now:
+IMPORTANT: You must analyze ALL causal relationships in the trajectory, not just one example per type.
+Output ALL relationships you identify for each of the six relationship types.
+Each relationship should be a separate JSON object.
+
+Output your relationships now (all relationships, not just one per type):
 """
 
 
@@ -155,6 +159,10 @@ def analyze_instance(instance_dir: Path, model) -> None:
     output_dir = instance_dir / "reverse-lm"
     output_dir.mkdir(exist_ok=True)
     
+    # Save raw LM output for debugging
+    debug_file = output_dir / "lm_output_raw.txt"
+    debug_file.write_text(lm_output)
+    
     # Group by relationship type and save
     relationship_types = {
         ("thought", "thought"): [],
@@ -173,6 +181,11 @@ def analyze_instance(instance_dir: Path, model) -> None:
             relationship_types[key].append(obj)
         else:
             print(f"  Warning: Unknown relationship type: {preceding} -> {following}")
+    
+    # Print summary
+    print(f"  Relationship breakdown:")
+    for (preceding, following), objects in relationship_types.items():
+        print(f"    {preceding} -> {following}: {len(objects)} relationship(s)")
     
     # Save each relationship type to its own file
     for (preceding, following), objects in relationship_types.items():
